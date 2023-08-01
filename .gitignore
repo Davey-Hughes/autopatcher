@@ -1,0 +1,16 @@
+# Ignore all
+*
+
+# # Unignore all with extensions
+!*.*
+
+# # Unignore all dirs
+!*/
+
+# ### the above ignores files without an extension
+
+/target
+
+# Misc files (roms, archives)
+*.nes
+*.zip
