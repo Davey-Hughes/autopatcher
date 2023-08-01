@@ -1,25 +1,21 @@
+mod archive;
+
 use sha1::{Digest, Sha1};
-use std::{fs, io, str};
-use zip::ZipArchive;
 
-pub fn calc_sha1(file: &str) -> Vec<u8> {
-    let mut file = fs::File::open(file).unwrap();
+pub fn calc_sha1(file_path: &str) -> Vec<u8> {
     let mut hasher = Sha1::new();
 
-    io::copy(&mut file, &mut hasher).unwrap();
-    hasher.finalize().to_vec()
-}
+    // note: doesn't work on headerless NES roms
+    let kind = infer::get_from_path(file_path)
+        .expect("file read successfully")
+        .expect("file type is known");
 
-pub fn calc_sha1_zip(file: &str) -> Vec<u8> {
-    let file = fs::File::open(file).unwrap();
-    let mut hasher = Sha1::new();
-
-    let mut archive = ZipArchive::new(file).unwrap();
-
-    for i in 0..archive.len() {
-        let mut inner = archive.by_index(i).unwrap();
-        io::copy(&mut inner, &mut hasher).unwrap();
-    }
+    match kind.mime_type() {
+        "application/zip" => archive::read_zip(file_path, &mut hasher),
+        "application/x-7z-compressed" => archive::read_7z(file_path, &mut hasher),
+        "application/x-nintendo-nes-rom" => archive::read_unarchived(file_path, &mut hasher),
+        _ => panic!("unsupported file"),
+    };
 
     hasher.finalize().to_vec()
 }
