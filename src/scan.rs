@@ -6,9 +6,15 @@ use walkdir::WalkDir;
 use crate::hash;
 
 #[derive(Debug)]
-struct HashedArchive {
-    f_name: String,
-    files: Vec<(String, Vec<u8>)>,
+pub struct FileHashes {
+    pub crc: u32,
+    pub sha1: [u8; 20],
+}
+
+#[derive(Debug, Default)]
+pub struct HashedArchive {
+    pub f_name: String,
+    pub files: Vec<(String, FileHashes)>,
 }
 
 async fn walker(start_path: PathBuf) {
@@ -47,16 +53,15 @@ async fn hash_worker(f_name: PathBuf) {
         Some(s) => s,
     };
 
-    printer(HashedArchive {
-        f_name: f_name.display().to_string(),
-        files: file_hashes,
-    })
+    printer(file_hashes)
 }
 
 fn printer(archive: HashedArchive) {
     println!("{}", archive.f_name);
     for (name, h) in archive.files {
-        println!("\t{}: {}", name, hash::string_from_sha1(h));
+        println!("\t{}", name);
+        println!("\t\tcrc: {:x}", h.crc);
+        println!("\t\tsha1: {}", hash::hex_string_from_slice(&h.sha1));
     }
 }
 

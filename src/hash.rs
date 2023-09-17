@@ -6,7 +6,9 @@ use std::{
 use compress_tools::{ArchiveContents, ArchiveIterator};
 use sha1::{Digest, Sha1};
 
-pub fn calc_sha1(file_path: &str) -> Option<Vec<(String, Vec<u8>)>> {
+use crate::scan::{FileHashes, HashedArchive};
+
+pub fn calc_sha1(file_path: &str) -> Option<HashedArchive> {
     // note: doesn't work on headerless NES roms
     let kind = match infer::get_from_path(file_path) {
         Err(_) => return None,
@@ -21,22 +23,42 @@ pub fn calc_sha1(file_path: &str) -> Option<Vec<(String, Vec<u8>)>> {
     }
 }
 
-pub fn string_from_sha1(input: Vec<u8>) -> String {
+pub fn hex_string_from_slice(input: &[u8]) -> String {
     input
         .iter()
         .map(|&v| format!("{:x}", v))
         .collect::<String>()
 }
 
-pub fn read_unarchived(file_path: &str) -> Vec<(String, Vec<u8>)> {
+pub fn read_unarchived(file_path: &str) -> HashedArchive {
     let mut file = fs::File::open(file_path).unwrap();
     let mut hasher = Sha1::new();
-    io::copy(&mut file, &mut hasher).unwrap();
-    vec![(file_path.to_string(), hasher.finalize().to_vec())]
+    let mut file_contents: Vec<u8> = Vec::new();
+    io::copy(&mut file, &mut file_contents).unwrap();
+    hasher.update(&file_contents);
+
+    HashedArchive {
+        f_name: file_path.to_string(),
+        files: vec![(
+            file_path.to_string(),
+            FileHashes {
+                sha1: hasher
+                    .finalize()
+                    .as_slice()
+                    .try_into()
+                    .expect("Wrong length"),
+                crc: crc32fast::hash(&file_contents),
+            },
+        )],
+    }
 }
 
-pub fn read_7z(file_path: &str) -> Vec<(String, Vec<u8>)> {
-    let mut ret: Vec<(String, Vec<u8>)> = Vec::new();
+pub fn read_7z(file_path: &str) -> HashedArchive {
+    let mut ret = HashedArchive {
+        f_name: file_path.to_string(),
+        files: Vec::new(),
+    };
+
     let mut data: HashMap<String, Vec<u8>> = HashMap::new();
     let mut name = String::default();
 
@@ -66,9 +88,19 @@ pub fn read_7z(file_path: &str) -> Vec<(String, Vec<u8>)> {
     iter.close().unwrap();
 
     for (k, v) in data {
-        let mut hasher = Sha1::new();
-        hasher.update(v);
-        ret.push((k, hasher.finalize().to_vec()));
+        let mut sha1_hasher = Sha1::new();
+        sha1_hasher.update(&v);
+        ret.files.push((
+            k,
+            FileHashes {
+                sha1: sha1_hasher
+                    .finalize()
+                    .as_slice()
+                    .try_into()
+                    .expect("Wrong length"),
+                crc: crc32fast::hash(&v.as_slice()),
+            },
+        ));
     }
 
     ret

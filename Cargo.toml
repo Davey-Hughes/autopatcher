@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 compress-tools = { path = "../compress-tools-rs", version = "0.14.3" }
 console-subscriber = "0.1.10"
+crc32fast = "1.3.2"
 crossbeam-channel = "0.5.8"
 digest = "0.10.7"
 dirs = "5.0.1"

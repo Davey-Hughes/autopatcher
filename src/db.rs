@@ -31,5 +31,10 @@ pub async fn establish_connection(url: &str) -> SqlitePool {
     .await
     .expect("Failed to setup the database");
 
+    sqlx::migrate!()
+        .run(&pool)
+        .await
+        .expect("Failed to run database migrations");
+
     pool
 }
