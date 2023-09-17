@@ -3,12 +3,22 @@ name = "autopatcher"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 compress-tools = { path = "../compress-tools-rs", version = "0.14.3" }
+console-subscriber = "0.1.10"
 crossbeam-channel = "0.5.8"
+digest = "0.10.7"
+dirs = "5.0.1"
 generic-array = "0.14.7"
 infer = "0.15.0"
 sha1 = "0.10.5"
+sqlx = { version = "0.7.1", features = [
+  "macros",
+  "migrate",
+  "sqlite",
+  "runtime-tokio",
+] }
+tokio = { version = "1.32.0", features = ["full", "tracing"] }
+tracing = "0.1.37"
+tracing-subscriber = "0.3.17"
 walkdir = "2.3.3"

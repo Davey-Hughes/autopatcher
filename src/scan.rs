@@ -1,58 +1,65 @@
-mod hash;
-
-use crossbeam_channel::{unbounded, Sender};
-use std::collections::HashMap;
+use sqlx::pool::Pool;
+use sqlx::Sqlite;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::thread;
 use walkdir::WalkDir;
 
-static NUM_THREADS: usize = 8;
+use crate::hash;
 
-fn walker(start_path: PathBuf, tx: Sender<PathBuf>) {
-    for entry in WalkDir::new(start_path)
-        .follow_links(true)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
-        let f_name = entry.into_path();
-
-        tx.send(f_name).unwrap();
-    }
-
-    drop(tx);
+#[derive(Debug)]
+struct HashedArchive {
+    f_name: String,
+    files: Vec<(String, Vec<u8>)>,
 }
 
-pub fn scan(start_path: PathBuf) {
-    let roms = Arc::new(Mutex::new(HashMap::<String, Vec<(String, String)>>::new()));
-    let (tx, rx) = unbounded();
-    let mut threads = vec![];
-    let _ = thread::spawn(|| walker(start_path, tx));
+async fn walker(start_path: PathBuf) {
+    let tasks: Vec<_> = WalkDir::new(start_path.clone())
+        .follow_links(true)
+        .into_iter()
+        .filter_map(|e| {
+            e.ok().map(|entry| {
+                let task_name = format!(
+                    "hash: {:?}",
+                    entry
+                        .clone()
+                        .into_path()
+                        .to_str()
+                        .unwrap()
+                        .replace(start_path.to_str().unwrap(), "")
+                );
+                tokio::task::Builder::new()
+                    .name(task_name.as_str())
+                    .spawn(async move {
+                        hash_worker(entry.into_path()).await;
+                    })
+                    .unwrap()
+            })
+        })
+        .collect();
 
-    for _ in 0..NUM_THREADS - 1 {
-        let rx_clone = rx.clone();
-        let roms_clone = roms.clone();
-        threads.push(thread::spawn(move || {
-            while let Ok(f_name) = rx_clone.recv() {
-                let file_hashes = match hash::calc_sha1(f_name.to_str().unwrap()) {
-                    None => continue,
-                    Some(s) => s,
-                };
-
-                let mut roms = roms_clone.lock().unwrap();
-                roms.insert(f_name.display().to_string(), file_hashes);
-            }
-        }));
+    for task in tasks {
+        task.await.unwrap();
     }
+}
 
-    for t in threads {
-        t.join().unwrap();
-    }
+async fn hash_worker(f_name: PathBuf) {
+    let file_hashes = match hash::calc_sha1(f_name.to_str().unwrap()) {
+        None => return,
+        Some(s) => s,
+    };
 
-    for (k, v) in roms.lock().unwrap().iter() {
-        println!("{}:", k);
-        for (name, h) in v {
-            println!("\t{}: {}", name, h);
-        }
+    printer(HashedArchive {
+        f_name: f_name.display().to_string(),
+        files: file_hashes,
+    })
+}
+
+fn printer(archive: HashedArchive) {
+    println!("{}", archive.f_name);
+    for (name, h) in archive.files {
+        println!("\t{}: {}", name, hash::string_from_sha1(h));
     }
+}
+
+pub async fn scan(start_path: PathBuf, _pool: Pool<Sqlite>) {
+    walker(start_path).await;
 }

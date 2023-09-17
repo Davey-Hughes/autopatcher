@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "autopatcher debug",
+      "program": "${workspaceRoot}/target/debug/${workspaceRootFolderName}",
+      "args": ["/home/davey/projects/autopatcher/temp/"]
+    }
+  ]
+}
